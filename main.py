@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify, render_template_string, url_for
 from datetime import datetime
 import sqlite3
 import logging
@@ -76,14 +76,13 @@ def clear_qr_codes():
 @app.route('/')
 def index():
     # Основная страница с отображением QR-кодов
-    return render_template_string("""
+    return render_template_string('''
     <!DOCTYPE html>
     <html lang="ru">
     <head>
         <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>QRobot</title>
-        <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+        <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
         <style>
             body {
                 background-color: #f4f7f6;
@@ -114,7 +113,28 @@ def index():
                 }
             }
         </style>
-        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    </head>
+    <body>
+        <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+            <div class="container">
+                <a class="navbar-brand" href="#">QRobot</a>
+            </div>
+        </nav>
+        <div class="container my-5">
+            <div id="alert_placeholder"></div>
+            <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap">
+                <h1 class="h3 mb-3 mb-md-0">Список считанных QR-кодов</h1>
+                <div class="btn-group">
+                    <button id="clear_btn" class="btn btn-danger">Очистить список</button>
+                </div>
+            </div>
+            <ul id="qr_list" class="list-group">
+                <!-- Данные будут динамически добавляться сюда -->
+            </ul>
+        </div>
+
+        <script src="{{ url_for('static', filename='js/jquery.min.js') }}"></script>
+        <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
         <script>
             var previousQrCount = 0;
 
@@ -149,6 +169,9 @@ def index():
                                 '</li>'
                             );
                         }
+                    },
+                    error: function(jqXHR, textStatus, errorThrown) {
+                        console.error('Ошибка при получении данных: ' + textStatus, errorThrown);
                     }
                 });
             }
@@ -183,35 +206,18 @@ def index():
                             success: function() {
                                 previousQrCount = 0;
                                 fetchQrCodes();
+                            },
+                            error: function(jqXHR, textStatus, errorThrown) {
+                                console.error('Ошибка при очистке данных: ' + textStatus, errorThrown);
                             }
                         });
                     }
                 });
             });
         </script>
-    </head>
-    <body>
-        <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-            <div class="container">
-                <a class="navbar-brand" href="#">QRobot</a>
-            </div>
-        </nav>
-        <div class="container my-5">
-            <div id="alert_placeholder"></div>
-            <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap">
-                <h1 class="h3 mb-3 mb-md-0">Список считанных QR-кодов</h1>
-                <div class="btn-group">
-                    <button id="clear_btn" class="btn btn-danger">Очистить список</button>
-                </div>
-            </div>
-            <ul id="qr_list" class="list-group">
-                <!-- Данные будут динамически добавляться сюда -->
-            </ul>
-        </div>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
     </body>
     </html>
-    """)
+    ''')
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

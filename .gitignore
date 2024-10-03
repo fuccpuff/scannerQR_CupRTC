@@ -1,0 +1,26 @@
+# Ignore virtual environment folders
+venv/
+myenv/
+
+# Ignore Python cache and compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Ignore logs and temporary files
+*.log
+*.tmp
+*.swp
+
+# Ignore database files
+*.sqlite3
+*.db
+
+# Ignore PyCharm project files
+.idea/
+
+# Ignore macOS system files
+.DS_Store
+
+# Ignore environment variables file
+.env

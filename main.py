@@ -1,12 +1,15 @@
 from flask import Flask, request, jsonify, render_template_string
 from datetime import datetime
 import sqlite3
-import os
+import logging
 
 app = Flask(__name__)
 
 # Путь к файлу базы данных
 DB_FILE = 'qr_codes.db'
+
+# Настройка логирования
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Функция для инициализации базы данных
 def init_db():
@@ -21,6 +24,7 @@ def init_db():
     ''')
     conn.commit()
     conn.close()
+    logging.info("База данных инициализирована.")
 
 # Инициализация базы данных при запуске сервера
 init_db()
@@ -36,9 +40,10 @@ def receive_qr():
             cursor.execute('INSERT INTO qr_codes (data, timestamp) VALUES (?, ?)', (qr_data, timestamp))
             conn.commit()
             conn.close()
-            print(f"Received QR Data: {qr_data}")
+            logging.info(f"Получены данные QR-кода: {qr_data} в {timestamp}")
             return 'OK', 200
         else:
+            logging.warning('Нет данных QR-кода в POST-запросе')
             return 'No Data Received', 400
     elif request.method == 'GET':
         # Получаем все QR-коды из базы данных
@@ -54,6 +59,7 @@ def receive_qr():
                 'data': row[0],
                 'timestamp': row[1]
             })
+        logging.info('QR-коды получены для отображения.')
         return jsonify(qr_codes)
 
 @app.route('/clear_qr_codes', methods=['POST'])
@@ -64,6 +70,7 @@ def clear_qr_codes():
     cursor.execute('DELETE FROM qr_codes')
     conn.commit()
     conn.close()
+    logging.info('QR-коды очищены.')
     return 'QR Codes Cleared', 200
 
 @app.route('/')
@@ -75,76 +82,90 @@ def index():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>QR Code Scanner</title>
+        <title>QRobot</title>
         <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
-        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
         <style>
             body {
                 background-color: #f4f7f6;
-                font-family: 'Arial', sans-serif;
-            }
-            .container {
-                max-width: 900px;
-                margin-top: 50px;
-            }
-            h1 {
-                font-size: 2.5rem;
-                text-align: center;
-                margin-bottom: 30px;
-                color: #333;
-            }
-            .list-group-item {
-                background-color: #fff;
-                border: none;
-                border-radius: 8px;
-                margin-bottom: 15px;
-                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-                transition: transform 0.2s ease;
-            }
-            .list-group-item:hover {
-                transform: translateY(-5px);
             }
             .timestamp {
                 font-size: 0.9rem;
                 color: #6c757d;
             }
-            .btn-clear {
-                margin-bottom: 20px;
-                background-color: #ff6b6b;
-                color: white;
+            .list-group-item {
                 border: none;
-                transition: background-color 0.3s ease;
+                padding: 0;
             }
-            .btn-clear:hover {
-                background-color: #ff4c4c;
+            .card:hover {
+                transform: translateY(-5px);
+                transition: transform 0.2s ease;
             }
-            footer {
-                text-align: center;
-                margin-top: 50px;
-                font-size: 0.9rem;
-                color: #999;
+            @media (max-width: 576px) {
+                .btn-group {
+                    flex-direction: column;
+                    width: 100%;
+                }
+                .btn-group .btn {
+                    width: 100%;
+                    margin-bottom: 10px;
+                }
+                .btn-group .btn:last-child {
+                    margin-bottom: 0;
+                }
             }
         </style>
-        <script type="text/javascript">
+        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+        <script>
+            var previousQrCount = 0;
+
             function fetchQrCodes() {
                 $.ajax({
                     url: '/receive_qr',
                     type: 'GET',
                     success: function(data) {
+                        // Проверяем, были ли добавлены новые QR-коды
+                        if (data.length > previousQrCount) {
+                            // Получен новый QR-код
+                            showNotification('Новый QR-код получен!');
+                            previousQrCount = data.length;
+                        } else if (data.length < previousQrCount) {
+                            // QR-коды были очищены
+                            previousQrCount = data.length;
+                        }
+
                         // Очищаем текущее содержимое
                         $('#qr_list').empty();
                         // Проходим по массиву QR-кодов и добавляем их в список
                         for (let i = 0; i < data.length; i++) {
                             let qrCode = data[i];
                             $('#qr_list').append(
-                                '<li class="list-group-item">' +
-                                '<strong>' + (i + 1) + '. ' + qrCode.data + '</strong><br>' +
-                                '<span class="timestamp">' + qrCode.timestamp + '</span>' +
+                                '<li class="list-group-item mb-3">' +
+                                    '<div class="card shadow-sm">' +
+                                        '<div class="card-body">' +
+                                            '<h5 class="card-title">' + (i + 1) + '. ' + qrCode.data + '</h5>' +
+                                            '<p class="card-text timestamp">' + qrCode.timestamp + '</p>' +
+                                        '</div>' +
+                                    '</div>' +
                                 '</li>'
                             );
                         }
                     }
                 });
+            }
+
+            function showNotification(message) {
+                var alert = $(
+                    '<div class="alert alert-success alert-dismissible fade show" role="alert">' +
+                        message +
+                        '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>' +
+                    '</div>'
+                );
+                $('#alert_placeholder').append(alert);
+
+                // Удаляем уведомление через 5 секунд
+                setTimeout(function() {
+                    alert.alert('close');
+                }, 5000);
             }
 
             // Обновляем данные каждые 5 секунд
@@ -160,6 +181,7 @@ def index():
                             url: '/clear_qr_codes',
                             type: 'POST',
                             success: function() {
+                                previousQrCount = 0;
                                 fetchQrCodes();
                             }
                         });
@@ -169,13 +191,24 @@ def index():
         </script>
     </head>
     <body>
-        <div class="container">
-            <h1>Список считанных QR-кодов</h1>
-            <button id="clear_btn" class="btn btn-clear">Очистить список</button>
+        <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+            <div class="container">
+                <a class="navbar-brand" href="#">QRobot</a>
+            </div>
+        </nav>
+        <div class="container my-5">
+            <div id="alert_placeholder"></div>
+            <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap">
+                <h1 class="h3 mb-3 mb-md-0">Список считанных QR-кодов</h1>
+                <div class="btn-group">
+                    <button id="clear_btn" class="btn btn-danger">Очистить список</button>
+                </div>
+            </div>
             <ul id="qr_list" class="list-group">
                 <!-- Данные будут динамически добавляться сюда -->
             </ul>
         </div>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
     </body>
     </html>
     """)
